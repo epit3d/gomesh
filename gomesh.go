@@ -3,60 +3,113 @@ package gomesh
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 )
 
+type nextLineFunc func() string
+
+func nextLineReader(scanner *bufio.Scanner) nextLineFunc {
+	return func() string {
+		scanner.Scan()
+		return scanner.Text()
+	}
+}
 type Msh struct {
-	Version   string
-	IsAscii   bool
-	Precision int
+	Version  string
+	IsAscii  bool
+	DataSize int
 
 	Nodes    []Node
 	Elements []Element
 }
 
 type Node struct {
-}
-type Element struct {
+	Tag, X, Y, Z string
 }
 
-func Parse(filename string) Msh {
+func NewNode(tag, x, y, z string) Node {
+	return Node{
+		Tag: tag,
+		X:   x,
+		Y:   y,
+		Z:   z,
+	}
+}
+
+type Element struct {
+	Tag, Type string
+	Tags      []string
+	NodeTags  []string
+	Data      []string
+}
+
+func NewElement(tag, typ string, tags, nodeTags []string) Element {
+	return Element{
+		Tag:      tag,
+		Type:     typ,
+		Tags:     tags,
+		NodeTags: nodeTags,
+	}
+}
+
+func (m *Msh) SetElementData(data map[string][]string) {
+	ind := map[string]int{}
+	for i, el := range m.Elements {
+		ind[el.Tag] = i
+	}
+	for k, v := range data {
+		m.Elements[ind[k]].Data = v
+	}
+}
+
+func ReadVersion(filename string) (string, bool, int, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	msh := Msh{}
-
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		switch line {
 		case "$MeshFormat":
-			msh.Version, msh.IsAscii, msh.Precision, err = ParseFormat(scanner)
-		case "$Nodes":
-			msh.Nodes, err = ParseNodes(scanner)
-		case "$Elements":
-			err = ParseElements(scanner)
-		default:
-			log.Printf("WARN: Tag %v not implemented, skipping", line)
+			return ParseFormat(	nextLineReader(scanner)	)
 		}
-		if err != nil {
-			log.Fatal("Error in file parsing: %v", err)
-		}
+	}
+	return "", false, 0, errors.New("Mesh Format not found ")
+}
+
+func Parse(filename string) (*Msh, error) {
+	version, _, _, err := ReadVersion(filename)
+	if err != nil {
+		log.Fatalf("Failed read version %v", err)
+	}
+	//0 Some mesh files out there have the version specified as version "2" when it really is
+	// "2.2". Same with "4" vs "4.1".
+	switch version {
+	case "2":
+		return Parse22(filename)
+	case "2.2":
+		return Parse22(filename)
+	case "4.0":
+		// implement me?
+		break
+	case "4":
+		return Parse41(filename)
+	case "4.1":
+		return Parse41(filename)
 	}
 
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-	return Msh{} //TODO:
+	return nil, fmt.Errorf("version is not recognized %v", version)
 }
-func ParseFormat(sc *bufio.Scanner) (string, bool, int, error) {
-	line := sc.Text()
+
+func ParseFormat(nextLine nextLineFunc) (string, bool, int, error) {
+	line := nextLine()
 	x := strings.Split(line, " ")
 	if len(x) != 3 {
 		return "", false, 0, errors.New("format len!=3: " + line)
@@ -70,60 +123,10 @@ func ParseFormat(sc *bufio.Scanner) (string, bool, int, error) {
 	default:
 		return "", false, 0, errors.New("invalid isAscii value in the format: " + line)
 	}
-	prec, err := strconv.Atoi(x[2])
+	datasize, err := strconv.Atoi(x[2])
 	if err != nil {
-		return "", false, 0, errors.New("invalid precision value in the format: " + line)
+		return "", false, 0, errors.New("invalid datasize value in the format: " + line)
 	}
-	sc.Text() // read last $EndMeshFormat line
-	return x[0], isAscii, prec, nil
-}
-
-func ParseNodes(sc *bufio.Scanner) ([]Node, error) {
-	line := sc.Text()
-	meta := strings.Split(line, " ")
-	if len(meta) != 4 {
-		return nil, errors.New("nodes meta len!=4: " + line)
-	}
-	numEnts, err := strconv.Atoi(meta[0])
-	if err != nil {
-		return nil, errors.New("invalid numEnts: " + line)
-	}
-	numNods, err := strconv.Atoi(meta[1])
-	if err != nil {
-		return nil, errors.New("invalid numNods: " + line)
-	}
-	/*	minNodeTag, err := strconv.Atoi(meta[2])
-		if err!= nil {
-			return nil, errors.New("invalid minNodeTag: "+ line)
-		}
-		maxNodeTag, err := strconv.Atoi(meta[3])
-		if err!= nil {
-			return nil, errors.New("invalid maxNodeTag: "+ line)
-		}*/
-	for i := 0; i < numEnts; i++ {
-		line := sc.Text()
-		meta := strings.Split(line, " ")
-		if len(meta) != 4 {
-			return nil, errors.New("ents meta len!=4: " + line)
-		}
-		for j := 0; j < numNods; j++ {
-			//read node tags
-		}
-		for j := 0; j < numNods; j++ {
-			//read coordinates for tags
-		}
-		//mesh.add entity()
-		return nil, errors.New("Not implemented")
-	}
-
-	sc.Text()       // read last $EndNodes line
-	return nil, nil //TODO:
-}
-
-func ParseElements(sc *bufio.Scanner) error {
-	line := sc.Text()
-	_ = strings.Split(line, " ")
-
-	sc.Text()                            // read last $EndNodes line
-	return errors.New("Not implemented") //TODO:
+	nextLine() // read last $EndMeshFormat line
+	return x[0], isAscii, datasize, nil
 }

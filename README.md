@@ -3,7 +3,16 @@ A simple golang parser for gmsh .msh files
 
 Mesh formats: https://gmsh.info/doc/texinfo/gmsh.html#MSH-file-format
 
-Format 4.1:
+Implemented:
+- [x] 2.2 Ascii
+
+TODO:
+- [ ] 2.2 Bin
+- [ ] 4.1 Ascii
+- [ ] 4.1 Bin
+  
+
+  Format 4.1:
 
     $MeshFormat
     4.1 0 8          MSH4.1, ASCII
@@ -46,3 +55,5 @@ Format 4.1:
     5 0.2
     6 0.4
     $EndNodeData
+
+
