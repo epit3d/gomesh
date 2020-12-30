@@ -12,7 +12,7 @@ TODO:
 - [ ] 4.1 Bin
   
 
-  Format 4.1:
+Format 4.1:
 
     $MeshFormat
     4.1 0 8          MSH4.1, ASCII
